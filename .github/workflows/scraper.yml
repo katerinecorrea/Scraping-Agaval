@@ -1,5 +1,8 @@
 name: CI/CD Pipeline - Scraping Agaval
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   schedule:
@@ -32,3 +35,11 @@ jobs:
         with:
           name: reporte-celulares-agaval
           path: output/*.csv
+
+      - name: Guardar CSV actualizado en el repositorio
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -f output/productos_agaval_celulares_5_paginas.csv
+          git diff --staged --quiet || git commit -m "chore: actualizar datos scraping celulares [skip ci]"
+          git push
