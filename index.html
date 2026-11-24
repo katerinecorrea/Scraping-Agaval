@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Celulares Agaval</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    .wrap { max-width: 1050px; margin: auto; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 18px; }
+    .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
+    .muted { color: #94a3b8; font-size: .85rem; }
+    .big { font-size: 1.4rem; font-weight: 700; margin: 4px 0; }
+    .green { color: #34d399; font-weight: 700; }
+    .rose { color: #fb7185; font-weight: 700; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    li { display: flex; justify-content: space-between; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; font-size: .9rem; }
+    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Celulares Agaval</h1>
+    <p class="muted" id="status">Cargando CSV...</p>
+
+    <div class="grid">
+      <div class="card"><div class="muted">Total celulares</div><div class="big" id="kTotal">-</div></div>
+      <div class="card"><div class="muted">Precio promedio</div><div class="big" id="kAvg">-</div></div>
+      <div class="card"><div class="muted">Más barato</div><div class="big green" id="kMin">-</div><div class="muted name" id="kMinN"></div></div>
+      <div class="card"><div class="muted">Más caro</div><div class="big rose" id="kMax">-</div><div class="muted name" id="kMaxN"></div></div>
+    </div>
+
+    <div class="card" style="margin-bottom: 18px;">
+      <h2 style="margin-top:0; font-size:1.05rem;">Precio promedio por marca</h2>
+      <div style="height: 270px;"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="cols">
+      <div class="card"><h2 style="margin-top:0; font-size:1.05rem;">Top 5 más baratos</h2><ul id="cheap"></ul></div>
+      <div class="card"><h2 style="margin-top:0; font-size:1.05rem;">Top 5 más caros</h2><ul id="exp"></ul></div>
+    </div>
+  </div>
+
+  <script>
+    const cop = n => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+    const num = s => { const v = parseFloat(String(s || '').replace(/[$,]/g, '')); return isNaN(v) ? null : v; };
+    const splitBrand = s => { const m = String(s || '').match(/^\[(.*?)\]\s*(.*)$/); return m ? [m[1].toUpperCase(), m[2]] : ['OTRA', s]; };
+
+    Papa.parse(`output/productos_agaval_celulares_5_paginas.csv?t=${Date.now()}`, {
+      download: true, header: true, delimiter: ';', skipEmptyLines: true,
+      complete: ({ data }) => {
+        const items = data.map(r => {
+          const [brand, name] = splitBrand(r['Nombre/Marca']);
+          return { brand, name, price: num(r['Valores']) };
+        }).filter(x => x.price !== null);
+
+        const sorted = [...items].sort((a, b) => a.price - b.price);
+        const avg = items.reduce((a, b) => a + b.price, 0) / items.length;
+
+        document.getElementById('status').textContent = `${items.length} productos cargados`;
+        document.getElementById('kTotal').textContent = items.length;
+        document.getElementById('kAvg').textContent = cop(avg);
+        document.getElementById('kMin').textContent = cop(sorted[0].price);
+        document.getElementById('kMinN').textContent = sorted[0].name;
+        document.getElementById('kMax').textContent = cop(sorted.at(-1).price);
+        document.getElementById('kMaxN').textContent = sorted.at(-1).name;
+
+        const byBrand = {};
+        items.forEach(({ brand, price }) => {
+          byBrand[brand] = byBrand[brand] || { sum: 0, n: 0 };
+          byBrand[brand].sum += price; byBrand[brand].n++;
+        });
+        const brands = Object.keys(byBrand).sort((a, b) => (byBrand[b].sum / byBrand[b].n) - (byBrand[a].sum / byBrand[a].n));
+
+        new Chart(document.getElementById('chart'), {
+          type: 'bar',
+          data: {
+            labels: brands,
+            datasets: [{ data: brands.map(b => Math.round(byBrand[b].sum / byBrand[b].n)), backgroundColor: '#38bdf8', borderRadius: 5 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => cop(c.raw) } } },
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+              y: { ticks: { color: '#94a3b8', callback: v => '$' + (v / 1e6).toFixed(1) + 'M' }, grid: { color: '#334155' } }
+            }
+          }
+        });
+
+        const paint = (id, list, cls) => {
+          document.getElementById(id).innerHTML = list.map((p, i) =>
+            `<li><span class="name"><b>#${i + 1}</b> [${p.brand}] ${p.name}</span><span class="${cls}">${cop(p.price)}</span></li>`
+          ).join('');
+        };
+        paint('cheap', sorted.slice(0, 5), 'green');
+        paint('exp', [...sorted].reverse().slice(0, 5), 'rose');
+      },
+      error: () => { document.getElementById('status').textContent = 'No se pudo cargar output/productos_agaval_celulares_5_paginas.csv'; }
+    });
+  </script>
+</body>
+</html>
