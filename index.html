@@ -11,14 +11,15 @@
     .wrap { max-width: 1050px; margin: auto; }
     .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 18px; }
     .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; min-width: 0; }
     .muted { color: #94a3b8; font-size: .85rem; }
     .big { font-size: 1.4rem; font-weight: 700; margin: 4px 0; }
     .green { color: #34d399; font-weight: 700; }
     .rose { color: #fb7185; font-weight: 700; }
     ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-    li { display: flex; justify-content: space-between; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; font-size: .9rem; }
-    .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    li { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #0f172a; padding: 10px; border-radius: 8px; font-size: .9rem; min-width: 0; }
+    .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .price { flex-shrink: 0; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -48,6 +49,7 @@
     const cop = n => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
     const num = s => { const v = parseFloat(String(s || '').replace(/[$,]/g, '')); return isNaN(v) ? null : v; };
     const splitBrand = s => { const m = String(s || '').match(/^\[(.*?)\]\s*(.*)$/); return m ? [m[1].toUpperCase(), m[2]] : ['OTRA', s]; };
+    const isAccessory = name => /(reloj|smartwatch|audifono|audífono|cargador|intercomunicador|forro|funda|vidrio|protector)/i.test(name);
 
     Papa.parse(`output/productos_agaval_celulares_5_paginas.csv?t=${Date.now()}`, {
       download: true, header: true, delimiter: ';', skipEmptyLines: true,
@@ -55,12 +57,12 @@
         const items = data.map(r => {
           const [brand, name] = splitBrand(r['Nombre/Marca']);
           return { brand, name, price: num(r['Valores']) };
-        }).filter(x => x.price !== null);
+        }).filter(x => x.price !== null && !isAccessory(x.name));
 
         const sorted = [...items].sort((a, b) => a.price - b.price);
         const avg = items.reduce((a, b) => a + b.price, 0) / items.length;
 
-        document.getElementById('status').textContent = `${items.length} productos cargados`;
+        document.getElementById('status').textContent = `${items.length} celulares cargados`;
         document.getElementById('kTotal').textContent = items.length;
         document.getElementById('kAvg').textContent = cop(avg);
         document.getElementById('kMin').textContent = cop(sorted[0].price);
@@ -93,7 +95,7 @@
 
         const paint = (id, list, cls) => {
           document.getElementById(id).innerHTML = list.map((p, i) =>
-            `<li><span class="name"><b>#${i + 1}</b> [${p.brand}] ${p.name}</span><span class="${cls}">${cop(p.price)}</span></li>`
+            `<li><span class="name" title="[${p.brand}] ${p.name}"><b>#${i + 1}</b> [${p.brand}] ${p.name}</span><span class="${cls} price">${cop(p.price)}</span></li>`
           ).join('');
         };
         paint('cheap', sorted.slice(0, 5), 'green');
